@@ -1,0 +1,76 @@
+// Prisma schema for the SQLite adapter (the zero-config default).
+// Mirrors ../postgres/schema.prisma exactly except for `generator.output`
+// and `datasource.provider` — keep model bodies identical across both.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../src/generated/prisma-sqlite"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  label     String    @default("Default")
+  createdAt DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt DateTime?
+
+  events Event[]
+
+  @@map("api_keys")
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  apiKeyId    String?
+  apiKey      ApiKey?  @relation(fields: [apiKeyId], references: [id])
+
+  provider    String
+  model       String
+
+  inputTokens  Int?
+  outputTokens Int?
+  totalTokens  Int?
+
+  latency     Int?
+  cost        Float?
+
+  status      String
+  errorMessage String?
+  errorStack   String?
+  errorCode    String?
+  errorStatusCode Int?
+
+  environment String?
+  userId      String?
+
+  metadata    String?
+  prompt      String?
+  response    String?
+
+  sdkName     String?
+  sdkVersion  String?
+
+  timestamp   DateTime
+  dayBucket   String
+  createdAt   DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([dayBucket])
+  @@index([provider])
+  @@index([model])
+  @@index([status])
+  @@index([apiKeyId])
+  @@map("events")
+}
+
+model Setting {
+  key   String @id
+  value String
+
+  @@map("settings")
+}
