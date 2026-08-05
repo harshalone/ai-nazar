@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { LargePromptProblem } from "./types";
 
 /** UTC day bucket (YYYY-MM-DD) for a given epoch-ms timestamp, used for fast daily rollups. */
 export function dayBucketFor(timestampMs: number): string {
@@ -60,4 +61,40 @@ export const MAX_PAGE_SIZE = 200;
 export function clampPageSize(limit?: number): number {
   if (!limit || limit <= 0) return DEFAULT_PAGE_SIZE;
   return Math.min(limit, MAX_PAGE_SIZE);
+}
+
+interface LargePromptRow {
+  provider: string;
+  model: string;
+  requests: number;
+  avgInputTokens: number;
+  totalCost: number;
+  totalTokens: number;
+}
+
+/**
+ * Flags models whose average input token count exceeds `thresholdTokens` and
+ * estimates monthly savings from each model's own blended cost-per-token —
+ * an approximation, not a billing-accurate figure.
+ */
+export function computeLargePromptSavings(
+  rows: LargePromptRow[],
+  thresholdTokens: number,
+  windowDays: number,
+): LargePromptProblem[] {
+  return rows
+    .filter((row) => row.avgInputTokens > thresholdTokens)
+    .map((row) => {
+      const tokensOverBudget = Math.max(0, row.avgInputTokens - thresholdTokens) * row.requests;
+      const costPerToken = row.totalTokens > 0 ? row.totalCost / row.totalTokens : 0;
+      const estimatedMonthlySavings = tokensOverBudget * costPerToken * (30 / windowDays);
+
+      return {
+        provider: row.provider,
+        model: row.model,
+        requests: row.requests,
+        avgInputTokens: row.avgInputTokens,
+        estimatedMonthlySavings,
+      };
+    });
 }
