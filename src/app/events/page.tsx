@@ -69,9 +69,9 @@ export default function EventsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Events</h1>
+            <h1 className="text-2xl font-bold text-foreground">Requests</h1>
             <p className="mt-1 text-sm text-foreground-muted">
-              Every AI request tracked by the SDK, most recent first.
+              Every request your app sent through an AI provider, most recent first.
             </p>
           </div>
           <Button variant="secondary" size="sm" onClickAsync={load}>

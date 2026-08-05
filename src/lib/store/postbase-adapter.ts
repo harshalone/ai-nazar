@@ -1,6 +1,7 @@
 import { createClient, type PostbaseClient, type QueryBuilder } from "postbasejs";
 import {
   clampPageSize,
+  computeLargePromptSavings,
   computeTotalTokens,
   dayBucketFor,
   decodeCursor,
@@ -16,6 +17,8 @@ import type {
   EventsPage,
   EventsStore,
   IncomingEvent,
+  LargePromptProblem,
+  ModelUsageStat,
   Pagination,
   StoredEvent,
   UsageSummary,
@@ -279,6 +282,85 @@ export class PostbaseEventsStore implements EventsStore {
     }));
   }
 
+  async getModelUsage(filters: EventFilters): Promise<ModelUsageStat[]> {
+    const where = buildSqlWhere(filters);
+    const { data, error } = await this.client.sql<{
+      provider: string;
+      model: string;
+      requests: string;
+      error_count: string;
+      cost: string | null;
+      total_tokens: string | null;
+      avg_latency: string | null;
+    }>(
+      `SELECT provider, model,
+         COUNT(*) AS requests,
+         COUNT(*) FILTER (WHERE status = 'error') AS error_count,
+         SUM(cost) AS cost,
+         SUM("totalTokens") AS total_tokens,
+         AVG(latency) AS avg_latency
+       FROM events
+       ${where.clause}
+       GROUP BY provider, model
+       ORDER BY SUM(cost) DESC NULLS LAST`,
+      where.params,
+    );
+
+    if (error) throw new Error(`Postbase model usage query failed: ${error}`);
+
+    return (data ?? []).map((row) => {
+      const requests = Number(row.requests);
+      const errorCount = Number(row.error_count);
+      return {
+        provider: row.provider,
+        model: row.model,
+        requests,
+        cost: Number(row.cost ?? 0),
+        totalTokens: Number(row.total_tokens ?? 0),
+        avgLatency: row.avg_latency ? Number(row.avg_latency) : null,
+        errorRate: requests > 0 ? errorCount / requests : 0,
+      };
+    });
+  }
+
+  async getLargePromptProblems(
+    filters: EventFilters,
+    thresholdTokens: number,
+  ): Promise<LargePromptProblem[]> {
+    const where = buildSqlWhere(filters);
+    const { data, error } = await this.client.sql<{
+      provider: string;
+      model: string;
+      requests: string;
+      avg_input_tokens: string | null;
+      total_cost: string | null;
+      total_tokens: string | null;
+    }>(
+      `SELECT provider, model,
+         COUNT(*) AS requests,
+         AVG("inputTokens") AS avg_input_tokens,
+         SUM(cost) AS total_cost,
+         SUM("totalTokens") AS total_tokens
+       FROM events
+       ${where.clause}
+       GROUP BY provider, model`,
+      where.params,
+    );
+
+    if (error) throw new Error(`Postbase large prompt query failed: ${error}`);
+
+    const rows = (data ?? []).map((row) => ({
+      provider: row.provider,
+      model: row.model,
+      requests: Number(row.requests),
+      avgInputTokens: Number(row.avg_input_tokens ?? 0),
+      totalCost: Number(row.total_cost ?? 0),
+      totalTokens: Number(row.total_tokens ?? 0),
+    }));
+
+    return computeLargePromptSavings(rows, thresholdTokens, windowDaysFor(filters));
+  }
+
   async validateApiKey(key: string): Promise<ApiKeyRecord | null> {
     const { data, error } = await this.client
       .from<ApiKeyRow>("api_keys")
@@ -358,6 +440,13 @@ function applyFilters(
   if (filters.from) query = query.gte("timestamp", new Date(filters.from).toISOString());
   if (filters.to) query = query.lte("timestamp", new Date(filters.to).toISOString());
   return query;
+}
+
+/** Approximate number of days covered by `filters`, defaulting to 30 when unbounded. */
+function windowDaysFor(filters: EventFilters): number {
+  if (!filters.from) return 30;
+  const to = filters.to ?? Date.now();
+  return Math.max(1, (to - filters.from) / (24 * 60 * 60 * 1000));
 }
 
 function buildSqlWhere(filters: EventFilters): { clause: string; params: unknown[] } {

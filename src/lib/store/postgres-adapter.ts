@@ -9,6 +9,8 @@ import type {
   EventsPage,
   EventsStore,
   IncomingEvent,
+  LargePromptProblem,
+  ModelUsageStat,
   Pagination,
   StoredEvent,
   UsageSummary,
@@ -54,6 +56,17 @@ export class PostgresEventsStore implements EventsStore {
 
   getDailyUsage(filters: EventFilters, days: number): Promise<DailyUsagePoint[]> {
     return shared.getDailyUsage(this.delegate, filters, days);
+  }
+
+  getModelUsage(filters: EventFilters): Promise<ModelUsageStat[]> {
+    return shared.getModelUsage(this.delegate, filters);
+  }
+
+  getLargePromptProblems(
+    filters: EventFilters,
+    thresholdTokens: number,
+  ): Promise<LargePromptProblem[]> {
+    return shared.getLargePromptProblems(this.delegate, filters, thresholdTokens);
   }
 
   validateApiKey(key: string): Promise<ApiKeyRecord | null> {

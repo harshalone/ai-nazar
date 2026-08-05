@@ -7,6 +7,9 @@ import Image from "next/image";
 import {
   LayoutDashboard,
   ListTree,
+  DollarSign,
+  AlertTriangle,
+  Boxes,
   KeyRound,
   Settings,
   Menu,
@@ -24,7 +27,10 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/events", label: "Events", icon: ListTree },
+  { href: "/events", label: "Requests", icon: ListTree },
+  { href: "/cost", label: "Cost breakdown", icon: DollarSign },
+  { href: "/problems", label: "Problems", icon: AlertTriangle },
+  { href: "/models", label: "Models", icon: Boxes },
   { href: "/api-keys", label: "API Keys", icon: KeyRound },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
