@@ -20,6 +20,10 @@ run it, get an API key, paste it into the SDK.
 **[Live demo →](https://ainazar.com)**
 
 <p align="center">
+  <img src="./public/assets/images/dashboard-screenshot.png" alt="AI Nazar dashboard overview: spend, requests, cost breakdown, and error rate across OpenAI, Anthropic, and Gemini models" width="800" />
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick start</a> •
   <a href="#why-no-login-in-v1">Why no login</a> •
   <a href="#architecture">Architecture</a> •
