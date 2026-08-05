@@ -4,12 +4,15 @@ import type {
   EventFilters,
   EventsPage,
   IncomingEvent,
+  LargePromptProblem,
+  ModelUsageStat,
   Pagination,
   StoredEvent,
   UsageSummary,
 } from "./types";
 import {
   clampPageSize,
+  computeLargePromptSavings,
   computeTotalTokens,
   dayBucketFor,
   decodeCursor,
@@ -275,6 +278,93 @@ export async function getDailyUsage(
   });
 
   return points.sort((a, b) => a.day.localeCompare(b.day));
+}
+
+/** Approximate number of days covered by `filters`, defaulting to 30 when unbounded. */
+function windowDaysFor(filters: EventFilters): number {
+  if (!filters.from) return 30;
+  const to = filters.to ?? Date.now();
+  return Math.max(1, (to - filters.from) / (24 * 60 * 60 * 1000));
+}
+
+export async function getModelUsage(
+  client: PrismaEventsDelegate,
+  filters: EventFilters,
+): Promise<ModelUsageStat[]> {
+  const where = buildWhere(filters);
+
+  const groups = await client.event.groupBy({
+    by: ["provider", "model"],
+    where,
+    _count: { _all: true },
+    _sum: { cost: true, totalTokens: true },
+    _avg: { latency: true },
+  });
+
+  const errorGroups = await client.event.groupBy({
+    by: ["provider", "model"],
+    where: { ...where, status: "error" },
+    _count: { _all: true },
+  });
+  const errorsByKey = new Map(
+    errorGroups.map((g) => [
+      `${g.provider as string}::${g.model as string}`,
+      (g._count as { _all: number })._all,
+    ]),
+  );
+
+  const stats: ModelUsageStat[] = groups.map((g) => {
+    const provider = g.provider as string;
+    const model = g.model as string;
+    const sum = g._sum as { cost: number | null; totalTokens: number | null };
+    const avg = g._avg as { latency: number | null };
+    const count = g._count as { _all: number };
+    const errorCount = errorsByKey.get(`${provider}::${model}`) ?? 0;
+
+    return {
+      provider,
+      model,
+      requests: count._all,
+      cost: sum.cost ?? 0,
+      totalTokens: sum.totalTokens ?? 0,
+      avgLatency: avg.latency,
+      errorRate: count._all > 0 ? errorCount / count._all : 0,
+    };
+  });
+
+  return stats.sort((a, b) => b.cost - a.cost);
+}
+
+export async function getLargePromptProblems(
+  client: PrismaEventsDelegate,
+  filters: EventFilters,
+  thresholdTokens: number,
+): Promise<LargePromptProblem[]> {
+  const where = buildWhere(filters);
+
+  const groups = await client.event.groupBy({
+    by: ["provider", "model"],
+    where,
+    _count: { _all: true },
+    _avg: { inputTokens: true },
+    _sum: { cost: true, totalTokens: true },
+  });
+
+  const rows = groups.map((g) => {
+    const avg = g._avg as { inputTokens: number | null };
+    const sum = g._sum as { cost: number | null; totalTokens: number | null };
+    const count = g._count as { _all: number };
+    return {
+      provider: g.provider as string,
+      model: g.model as string,
+      requests: count._all,
+      avgInputTokens: avg.inputTokens ?? 0,
+      totalCost: sum.cost ?? 0,
+      totalTokens: sum.totalTokens ?? 0,
+    };
+  });
+
+  return computeLargePromptSavings(rows, thresholdTokens, windowDaysFor(filters));
 }
 
 function toApiKeyRecord(row: Record<string, unknown>): ApiKeyRecord {

@@ -2,17 +2,38 @@
   <img src="./public/assets/images/logo.png" alt="AI Nazar logo" width="120" />
 </p>
 
-# AI Nazar Dashboard
+<h1 align="center">AI Nazar Dashboard</h1>
 
-The open-source dashboard for [AI Nazar](https://github.com/harshalone/ai-nazar-sdk) —
-view cost, latency, tokens, and errors sent by the SDK, in real time.
+<p align="center">
+  <a href="https://github.com/harshalone/ai-nazar/actions/workflows/ci.yml"><img src="https://github.com/harshalone/ai-nazar/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/harshalone/ai-nazar" alt="License"></a>
+  <a href="https://github.com/harshalone/ai-nazar/releases"><img src="https://img.shields.io/github/v/release/harshalone/ai-nazar?include_prereleases" alt="Latest release"></a>
+  <a href="https://github.com/harshalone/ai-nazar/stargazers"><img src="https://img.shields.io/github/stars/harshalone/ai-nazar?style=flat" alt="GitHub stars"></a>
+  <a href="https://github.com/harshalone/ai-nazar/issues"><img src="https://img.shields.io/github/issues/harshalone/ai-nazar" alt="Open issues"></a>
+</p>
 
-**No login. No account. No signup.** Clone it, run it, get an API key,
-paste it into the SDK. That's the whole setup.
+The open-source dashboard for [AI Nazar](https://github.com/harshalone/ai-nazar-sdk): a
+drop-in wrapper for your OpenAI client that shows every request's cost, latency,
+tokens, and errors in real time. **No login, no account, no signup** — clone it,
+run it, get an API key, paste it into the SDK.
+
+**[Live demo →](https://ainazar.com)**
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> •
+  <a href="#why-no-login-in-v1">Why no login</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#scripts">Scripts</a> •
+  <a href="#switching-backends">Switching backends</a> •
+  <a href="#contributing">Contributing</a> •
+  <a href="#license">License</a>
+</p>
 
 ## Quick start
 
 ```bash
+git clone https://github.com/harshalone/ai-nazar.git
+cd ai-nazar
 npm install
 npm run dev
 ```
@@ -107,6 +128,13 @@ Configuration lives entirely in `.env.local`, written once by `/setup`.
 To switch backends, edit or remove the `NAZAR_*` block and restart the
 app — you'll land back on `/setup`.
 
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for
+local setup, the PR workflow, and issues tagged
+[`good first issue`](https://github.com/harshalone/ai-nazar/labels/good%20first%20issue)
+if you're looking for a place to start.
+
 ## License
 
-MIT
+[MIT](./LICENSE)

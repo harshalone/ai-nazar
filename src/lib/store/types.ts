@@ -80,6 +80,25 @@ export interface DailyUsagePoint {
   totalTokens: number;
 }
 
+export interface ModelUsageStat {
+  provider: string;
+  model: string;
+  requests: number;
+  cost: number;
+  totalTokens: number;
+  avgLatency: number | null;
+  errorRate: number;
+}
+
+export interface LargePromptProblem {
+  provider: string;
+  model: string;
+  requests: number;
+  avgInputTokens: number;
+  /** Rough projected monthly savings, estimated from this model's blended observed cost-per-token. */
+  estimatedMonthlySavings: number;
+}
+
 export interface ApiKeyRecord {
   id: string;
   key: string;
@@ -105,6 +124,15 @@ export interface EventsStore {
   getUsageSummary(filters: EventFilters): Promise<UsageSummary>;
 
   getDailyUsage(filters: EventFilters, days: number): Promise<DailyUsagePoint[]>;
+
+  /** Per-model usage rollup (cost, tokens, latency, error rate) — powers Cost breakdown and Models screens. */
+  getModelUsage(filters: EventFilters): Promise<ModelUsageStat[]>;
+
+  /** Flags models whose average input token count exceeds `thresholdTokens`. */
+  getLargePromptProblems(
+    filters: EventFilters,
+    thresholdTokens: number,
+  ): Promise<LargePromptProblem[]>;
 
   /** Validates a Bearer API key from the SDK, returning its record if active. */
   validateApiKey(key: string): Promise<ApiKeyRecord | null>;
