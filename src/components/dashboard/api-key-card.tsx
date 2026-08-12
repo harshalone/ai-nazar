@@ -22,7 +22,8 @@ export function ApiKeyCard({ apiKey, endpoint }: { apiKey: string; endpoint: str
     setCopied(false);
   }
 
-  const snippet = `import { Nazar } from "ai-nazar";
+  const snippet = `import OpenAI from "openai";
+import { Nazar } from "@lonare/ai-nazar-sdk";
 
 const nazar = Nazar.init({
   apiKey: "${apiKey}",

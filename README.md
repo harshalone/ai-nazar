@@ -55,7 +55,8 @@ Once configured, the dashboard shows your API key immediately. Paste it
 into the SDK:
 
 ```ts
-import { Nazar } from "ai-nazar";
+import OpenAI from "openai";
+import { Nazar } from "@lonare/ai-nazar-sdk";
 
 const nazar = Nazar.init({
   apiKey: "nz_live_xxxxx", // from the dashboard
