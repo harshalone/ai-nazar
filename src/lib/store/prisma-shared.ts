@@ -1,6 +1,8 @@
 import type {
   ApiKeyRecord,
   DailyUsagePoint,
+  DimensionDailyPoint,
+  DimensionTrend,
   EventFilters,
   EventsPage,
   IncomingEvent,
@@ -8,6 +10,7 @@ import type {
   ModelUsageStat,
   Pagination,
   StoredEvent,
+  UsageDimension,
   UsageSummary,
 } from "./types";
 import {
@@ -365,6 +368,144 @@ export async function getLargePromptProblems(
   });
 
   return computeLargePromptSavings(rows, thresholdTokens, windowDaysFor(filters));
+}
+
+/** Groups by the raw `groupField` (`model` or `apiKeyId`); labels are resolved by the caller. */
+function groupFieldFor(dimension: UsageDimension): "model" | "apiKeyId" {
+  return dimension === "model" ? "model" : "apiKeyId";
+}
+
+/** Resolves API key ids to their labels for the `apiKey` dimension; identity for `model`. */
+async function resolveLabels(
+  client: PrismaEventsDelegate,
+  dimension: UsageDimension,
+  keys: string[],
+): Promise<Map<string, string>> {
+  if (dimension === "model") {
+    return new Map(keys.map((key) => [key, key]));
+  }
+
+  const rows = await client.apiKey.findMany({
+    where: { id: { in: keys.filter((k) => k !== "none") } },
+  });
+  const labelById = new Map(rows.map((r) => [r.id as string, r.label as string]));
+  return new Map(keys.map((key) => [key, key === "none" ? "Unknown" : (labelById.get(key) ?? "Unknown")]));
+}
+
+/**
+ * Daily spend/requests/tokens broken out by `dimension` — the data a
+ * stacked-by-day chart needs. One row per (day, dimension value).
+ */
+export async function getDimensionDailyUsage(
+  client: PrismaEventsDelegate,
+  dimension: UsageDimension,
+  filters: EventFilters,
+): Promise<DimensionDailyPoint[]> {
+  const where = buildWhere(filters);
+  const groupField = groupFieldFor(dimension);
+
+  const groups = await client.event.groupBy({
+    by: ["dayBucket", groupField],
+    where,
+    _count: { _all: true },
+    _sum: { cost: true, totalTokens: true },
+  });
+
+  const rawKeys = groups.map((g) => (g[groupField] as string | null) ?? "none");
+  const labelByKey = await resolveLabels(client, dimension, [...new Set(rawKeys)]);
+
+  return groups.map((g) => {
+    const sum = g._sum as { cost: number | null; totalTokens: number | null };
+    const count = g._count as { _all: number };
+    const key = (g[groupField] as string | null) ?? "none";
+    return {
+      day: g.dayBucket as string,
+      key,
+      label: labelByKey.get(key) ?? key,
+      cost: sum.cost ?? 0,
+      requests: count._all,
+      totalTokens: sum.totalTokens ?? 0,
+    };
+  });
+}
+
+async function getDimensionTotals(
+  client: PrismaEventsDelegate,
+  dimension: UsageDimension,
+  filters: EventFilters,
+): Promise<Array<{ key: string; label: string; cost: number; requests: number; totalTokens: number }>> {
+  const where = buildWhere(filters);
+  const groupField = groupFieldFor(dimension);
+
+  const groups = await client.event.groupBy({
+    by: [groupField],
+    where,
+    _count: { _all: true },
+    _sum: { cost: true, totalTokens: true },
+  });
+
+  const rawKeys = groups.map((g) => (g[groupField] as string | null) ?? "none");
+  const labelByKey = await resolveLabels(client, dimension, [...new Set(rawKeys)]);
+
+  return groups.map((g) => {
+    const sum = g._sum as { cost: number | null; totalTokens: number | null };
+    const count = g._count as { _all: number };
+    const key = (g[groupField] as string | null) ?? "none";
+    return {
+      key,
+      label: labelByKey.get(key) ?? key,
+      cost: sum.cost ?? 0,
+      requests: count._all,
+      totalTokens: sum.totalTokens ?? 0,
+    };
+  });
+}
+
+/**
+ * Totals per dimension value for `filters`' window, each with its % change
+ * vs. the immediately preceding window of equal length and a same-length
+ * daily sparkline — what the "Trending" list and the Explore table rank by.
+ */
+export async function getDimensionTrends(
+  client: PrismaEventsDelegate,
+  dimension: UsageDimension,
+  filters: EventFilters,
+): Promise<DimensionTrend[]> {
+  const from = filters.from ?? Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const to = filters.to ?? Date.now();
+  const windowMs = to - from;
+  const prevFrom = from - windowMs;
+  const prevTo = from;
+
+  const [current, previous, daily] = await Promise.all([
+    getDimensionTotals(client, dimension, { ...filters, from, to }),
+    getDimensionTotals(client, dimension, { ...filters, from: prevFrom, to: prevTo }),
+    getDimensionDailyUsage(client, dimension, { ...filters, from, to }),
+  ]);
+
+  const previousByKey = new Map(previous.map((row) => [row.key, row.cost]));
+  const sparklineByKey = new Map<string, number[]>();
+  for (const point of [...daily].sort((a, b) => a.day.localeCompare(b.day))) {
+    const series = sparklineByKey.get(point.key) ?? [];
+    series.push(point.cost);
+    sparklineByKey.set(point.key, series);
+  }
+
+  return current
+    .map((row) => {
+      const prevCost = previousByKey.get(row.key) ?? 0;
+      const changePct = prevCost > 0 ? ((row.cost - prevCost) / prevCost) * 100 : row.cost > 0 ? null : 0;
+      return {
+        key: row.key,
+        label: row.label,
+        cost: row.cost,
+        requests: row.requests,
+        totalTokens: row.totalTokens,
+        changePct,
+        sparkline: sparklineByKey.get(row.key) ?? [],
+      };
+    })
+    .sort((a, b) => b.cost - a.cost);
 }
 
 function toApiKeyRecord(row: Record<string, unknown>): ApiKeyRecord {

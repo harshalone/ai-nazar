@@ -108,6 +108,31 @@ export interface ApiKeyRecord {
   revokedAt: string | null;
 }
 
+/** A dimension the Trends/Explore tabs can group and rank usage by. */
+export type UsageDimension = "model" | "apiKey";
+
+/** One day's spend for one dimension value — the building block of a stacked-by-day chart. */
+export interface DimensionDailyPoint {
+  day: string;
+  key: string;
+  label: string;
+  cost: number;
+  requests: number;
+  totalTokens: number;
+}
+
+/** Totals for one dimension value across a period, plus its trend vs. the prior period. */
+export interface DimensionTrend {
+  key: string;
+  label: string;
+  cost: number;
+  requests: number;
+  totalTokens: number;
+  /** % change vs. the immediately preceding period of equal length. Null when there's no prior-period data to compare against. */
+  changePct: number | null;
+  sparkline: number[];
+}
+
 export interface EventsStore {
   /** Human-readable identifier for the active adapter, e.g. "sqlite". */
   readonly kind: "sqlite" | "postgres" | "postbase";
@@ -133,6 +158,18 @@ export interface EventsStore {
     filters: EventFilters,
     thresholdTokens: number,
   ): Promise<LargePromptProblem[]>;
+
+  /** Daily spend/requests/tokens broken out by `dimension` — powers the Trends tab's stacked-by-day charts. */
+  getDimensionDailyUsage(
+    dimension: UsageDimension,
+    filters: EventFilters,
+  ): Promise<DimensionDailyPoint[]>;
+
+  /** Totals per dimension value with period-over-period trend — powers the Trends tab's "Trending" list and the Explore tab's table. */
+  getDimensionTrends(
+    dimension: UsageDimension,
+    filters: EventFilters,
+  ): Promise<DimensionTrend[]>;
 
   /** Validates a Bearer API key from the SDK, returning its record if active. */
   validateApiKey(key: string): Promise<ApiKeyRecord | null>;

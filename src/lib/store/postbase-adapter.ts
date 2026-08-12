@@ -13,6 +13,8 @@ import {
 import type {
   ApiKeyRecord,
   DailyUsagePoint,
+  DimensionDailyPoint,
+  DimensionTrend,
   EventFilters,
   EventsPage,
   EventsStore,
@@ -21,6 +23,7 @@ import type {
   ModelUsageStat,
   Pagination,
   StoredEvent,
+  UsageDimension,
   UsageSummary,
 } from "./types";
 
@@ -361,6 +364,122 @@ export class PostbaseEventsStore implements EventsStore {
     return computeLargePromptSavings(rows, thresholdTokens, windowDaysFor(filters));
   }
 
+  async getDimensionDailyUsage(
+    dimension: UsageDimension,
+    filters: EventFilters,
+  ): Promise<DimensionDailyPoint[]> {
+    const { select, groupBy, join } = dimensionSql(dimension);
+    const where = buildSqlWhere(filters, "e");
+
+    const { data, error } = await this.client.sql<{
+      day: string;
+      key: string;
+      label: string;
+      cost: string | null;
+      requests: string;
+      total_tokens: string | null;
+    }>(
+      `SELECT e."dayBucket" AS day, ${select},
+         SUM(e.cost) AS cost,
+         COUNT(*) AS requests,
+         SUM(e."totalTokens") AS total_tokens
+       FROM events e
+       ${join}
+       ${where.clause}
+       GROUP BY e."dayBucket", ${groupBy}
+       ORDER BY e."dayBucket" ASC`,
+      where.params,
+    );
+
+    if (error) throw new Error(`Postbase dimension daily usage query failed: ${error}`);
+
+    return (data ?? []).map((row) => ({
+      day: row.day,
+      key: row.key,
+      label: row.label,
+      cost: Number(row.cost ?? 0),
+      requests: Number(row.requests),
+      totalTokens: Number(row.total_tokens ?? 0),
+    }));
+  }
+
+  async getDimensionTrends(
+    dimension: UsageDimension,
+    filters: EventFilters,
+  ): Promise<DimensionTrend[]> {
+    const from = filters.from ?? Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const to = filters.to ?? Date.now();
+    const windowMs = to - from;
+    const prevFrom = from - windowMs;
+    const prevTo = from;
+
+    const [current, previous, daily] = await Promise.all([
+      this.getDimensionTotals(dimension, { ...filters, from, to }),
+      this.getDimensionTotals(dimension, { ...filters, from: prevFrom, to: prevTo }),
+      this.getDimensionDailyUsage(dimension, { ...filters, from, to }),
+    ]);
+
+    const previousByKey = new Map(previous.map((row) => [row.key, row.cost]));
+    const sparklineByKey = new Map<string, number[]>();
+    for (const point of daily) {
+      const series = sparklineByKey.get(point.key) ?? [];
+      series.push(point.cost);
+      sparklineByKey.set(point.key, series);
+    }
+
+    return current
+      .map((row) => {
+        const prevCost = previousByKey.get(row.key) ?? 0;
+        const changePct = prevCost > 0 ? ((row.cost - prevCost) / prevCost) * 100 : row.cost > 0 ? null : 0;
+        return {
+          key: row.key,
+          label: row.label,
+          cost: row.cost,
+          requests: row.requests,
+          totalTokens: row.totalTokens,
+          changePct,
+          sparkline: sparklineByKey.get(row.key) ?? [],
+        };
+      })
+      .sort((a, b) => b.cost - a.cost);
+  }
+
+  private async getDimensionTotals(
+    dimension: UsageDimension,
+    filters: EventFilters,
+  ): Promise<Array<{ key: string; label: string; cost: number; requests: number; totalTokens: number }>> {
+    const { select, groupBy, join } = dimensionSql(dimension);
+    const where = buildSqlWhere(filters, "e");
+
+    const { data, error } = await this.client.sql<{
+      key: string;
+      label: string;
+      cost: string | null;
+      requests: string;
+      total_tokens: string | null;
+    }>(
+      `SELECT ${select},
+         SUM(e.cost) AS cost,
+         COUNT(*) AS requests,
+         SUM(e."totalTokens") AS total_tokens
+       FROM events e
+       ${join}
+       ${where.clause}
+       GROUP BY ${groupBy}`,
+      where.params,
+    );
+
+    if (error) throw new Error(`Postbase dimension totals query failed: ${error}`);
+
+    return (data ?? []).map((row) => ({
+      key: row.key,
+      label: row.label,
+      cost: Number(row.cost ?? 0),
+      requests: Number(row.requests),
+      totalTokens: Number(row.total_tokens ?? 0),
+    }));
+  }
+
   async validateApiKey(key: string): Promise<ApiKeyRecord | null> {
     const { data, error } = await this.client
       .from<ApiKeyRow>("api_keys")
@@ -449,41 +568,55 @@ function windowDaysFor(filters: EventFilters): number {
   return Math.max(1, (to - filters.from) / (24 * 60 * 60 * 1000));
 }
 
-function buildSqlWhere(filters: EventFilters): { clause: string; params: unknown[] } {
+/** `alias` optionally qualifies every column (e.g. "e" -> `e.provider`), needed once a query joins in another table. */
+function buildSqlWhere(filters: EventFilters, alias?: string): { clause: string; params: unknown[] } {
+  const prefix = alias ? `${alias}.` : "";
   const conditions: string[] = [];
   const params: unknown[] = [];
 
   if (filters.provider) {
     params.push(filters.provider);
-    conditions.push(`provider = $${params.length}`);
+    conditions.push(`${prefix}provider = $${params.length}`);
   }
   if (filters.model) {
     params.push(filters.model);
-    conditions.push(`model = $${params.length}`);
+    conditions.push(`${prefix}model = $${params.length}`);
   }
   if (filters.status) {
     params.push(filters.status);
-    conditions.push(`status = $${params.length}`);
+    conditions.push(`${prefix}status = $${params.length}`);
   }
   if (filters.environment) {
     params.push(filters.environment);
-    conditions.push(`environment = $${params.length}`);
+    conditions.push(`${prefix}environment = $${params.length}`);
   }
   if (filters.userId) {
     params.push(filters.userId);
-    conditions.push(`"userId" = $${params.length}`);
+    conditions.push(`${prefix}"userId" = $${params.length}`);
   }
   if (filters.from) {
     params.push(new Date(filters.from).toISOString());
-    conditions.push(`timestamp >= $${params.length}`);
+    conditions.push(`${prefix}timestamp >= $${params.length}`);
   }
   if (filters.to) {
     params.push(new Date(filters.to).toISOString());
-    conditions.push(`timestamp <= $${params.length}`);
+    conditions.push(`${prefix}timestamp <= $${params.length}`);
   }
 
   return {
     clause: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
     params,
+  };
+}
+
+/** SQL for the (key, label) pair a dimension groups by, and the join it needs. */
+function dimensionSql(dimension: UsageDimension): { select: string; groupBy: string; join: string } {
+  if (dimension === "model") {
+    return { select: `e.model AS key, e.model AS label`, groupBy: `e.model`, join: "" };
+  }
+  return {
+    select: `COALESCE(e."apiKeyId", 'none') AS key, COALESCE(k.label, 'Unknown') AS label`,
+    groupBy: `e."apiKeyId", k.label`,
+    join: `LEFT JOIN api_keys k ON k.id = e."apiKeyId"`,
   };
 }

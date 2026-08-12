@@ -5,6 +5,8 @@ import type { PrismaEventsDelegate } from "./prisma-shared";
 import type {
   ApiKeyRecord,
   DailyUsagePoint,
+  DimensionDailyPoint,
+  DimensionTrend,
   EventFilters,
   EventsPage,
   EventsStore,
@@ -13,6 +15,7 @@ import type {
   ModelUsageStat,
   Pagination,
   StoredEvent,
+  UsageDimension,
   UsageSummary,
 } from "./types";
 
@@ -67,6 +70,17 @@ export class PostgresEventsStore implements EventsStore {
     thresholdTokens: number,
   ): Promise<LargePromptProblem[]> {
     return shared.getLargePromptProblems(this.delegate, filters, thresholdTokens);
+  }
+
+  getDimensionDailyUsage(
+    dimension: UsageDimension,
+    filters: EventFilters,
+  ): Promise<DimensionDailyPoint[]> {
+    return shared.getDimensionDailyUsage(this.delegate, dimension, filters);
+  }
+
+  getDimensionTrends(dimension: UsageDimension, filters: EventFilters): Promise<DimensionTrend[]> {
+    return shared.getDimensionTrends(this.delegate, dimension, filters);
   }
 
   validateApiKey(key: string): Promise<ApiKeyRecord | null> {

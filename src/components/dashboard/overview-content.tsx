@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Activity, DollarSign, Sparkles, TrendingDown } from "lucide-react";
+import { Activity, DollarSign, TrendingDown } from "lucide-react";
 import type { DailyUsagePoint, LargePromptProblem, ModelUsageStat, UsageSummary } from "@/lib/store/types";
 import { buildDemoData } from "@/lib/utils/demo-data";
 import { UsageChart } from "@/components/dashboard/usage-chart";
@@ -10,9 +10,7 @@ import { DonutChart } from "@/components/dashboard/donut-chart";
 import { HorizontalBarChart } from "@/components/dashboard/horizontal-bar-chart";
 import { StackedBarChart } from "@/components/dashboard/stacked-bar-chart";
 import { RadialGauge } from "@/components/dashboard/radial-gauge";
-import { DateRangePicker } from "@/components/dashboard/date-range-picker";
 import { StatCard } from "@/components/ui/stat-card";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 interface OverviewData {
@@ -22,23 +20,23 @@ interface OverviewData {
   problems: LargePromptProblem[];
 }
 
-const DEFAULT_DAYS = 14;
-
 export function OverviewContent({
+  days,
+  demoMode,
   summary,
   daily,
   modelUsage,
   problems,
 }: {
+  days: number;
+  demoMode: boolean;
   summary: UsageSummary;
   daily: DailyUsagePoint[];
   modelUsage: ModelUsageStat[];
   problems: LargePromptProblem[];
 }) {
-  const [demoMode, setDemoMode] = useState(false);
-  const [days, setDays] = useState(DEFAULT_DAYS);
   const [liveData, setLiveData] = useState<OverviewData>({ summary, daily, modelUsage, problems });
-  const [loadedDays, setLoadedDays] = useState(DEFAULT_DAYS);
+  const [loadedDays, setLoadedDays] = useState(days);
   const loading = !demoMode && loadedDays !== days;
 
   // Effect body performs no synchronous setState — it kicks off an async
@@ -98,27 +96,6 @@ export function OverviewContent({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Overview</h1>
-          <p className="mt-1 text-sm text-foreground-muted">
-            Live AI request activity across all providers.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <DateRangePicker days={days} onChange={setDays} />
-          <Button
-            variant={demoMode ? "primary" : "secondary"}
-            size="md"
-            onClick={() => setDemoMode((v) => !v)}
-            className="shrink-0"
-          >
-            <Sparkles className="h-4 w-4" />
-            {demoMode ? "Viewing demo data" : "Demo data"}
-          </Button>
-        </div>
-      </div>
-
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
           label={`Spend — last ${days}d`}

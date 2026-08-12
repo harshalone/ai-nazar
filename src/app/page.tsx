@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getStore } from "@/lib/store/get-store";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { OverviewContent } from "@/components/dashboard/overview-content";
+import { ActivityView } from "@/components/dashboard/activity-view";
 import { LARGE_PROMPT_THRESHOLD_TOKENS } from "@/app/problems/page";
 
 const DEFAULT_DAYS = 14;
@@ -25,7 +25,12 @@ export default async function OverviewPage() {
 
   return (
     <DashboardShell fullWidth>
-      <OverviewContent
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold text-foreground">Activity</h1>
+        <p className="text-sm text-foreground-muted">Your usage across models on AI Nazar</p>
+      </div>
+
+      <ActivityView
         summary={summary}
         daily={daily}
         modelUsage={modelUsage}
