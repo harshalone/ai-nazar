@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, DollarSign, Sparkles, TrendingDown } from "lucide-react";
 import type { DailyUsagePoint, LargePromptProblem, ModelUsageStat, UsageSummary } from "@/lib/store/types";
 import { buildDemoData } from "@/lib/utils/demo-data";
-import { ApiKeyCard } from "@/components/dashboard/api-key-card";
 import { UsageChart } from "@/components/dashboard/usage-chart";
 import { AreaChart } from "@/components/dashboard/area-chart";
 import { DonutChart } from "@/components/dashboard/donut-chart";
@@ -26,15 +25,11 @@ interface OverviewData {
 const DEFAULT_DAYS = 14;
 
 export function OverviewContent({
-  apiKey,
-  endpoint,
   summary,
   daily,
   modelUsage,
   problems,
 }: {
-  apiKey: string;
-  endpoint: string;
   summary: UsageSummary;
   daily: DailyUsagePoint[];
   modelUsage: ModelUsageStat[];
@@ -68,7 +63,6 @@ export function OverviewContent({
 
   const demoData = useMemo(() => buildDemoData(days), [days]);
 
-  const activeApiKey = demoMode ? demoData.apiKey : apiKey;
   const activeSummary = demoMode ? demoData.summary : liveData.summary;
   const activeDaily = demoMode ? demoData.daily : liveData.daily;
   const activeModelUsage = demoMode ? demoData.modelUsage : liveData.modelUsage;
@@ -124,8 +118,6 @@ export function OverviewContent({
           </Button>
         </div>
       </div>
-
-      {!demoMode && <ApiKeyCard apiKey={activeApiKey} endpoint={endpoint} />}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard

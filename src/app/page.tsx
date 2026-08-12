@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { getStore } from "@/lib/store/get-store";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { OverviewContent } from "@/components/dashboard/overview-content";
@@ -17,23 +16,16 @@ export default async function OverviewPage() {
 
   const filter = { from: daysAgo(DEFAULT_DAYS) };
 
-  const [apiKey, summary, daily, modelUsage, problems] = await Promise.all([
-    store.getOrCreateDefaultApiKey(),
+  const [summary, daily, modelUsage, problems] = await Promise.all([
     store.getUsageSummary(filter),
     store.getDailyUsage({}, DEFAULT_DAYS),
     store.getModelUsage(filter),
     store.getLargePromptProblems(filter, LARGE_PROMPT_THRESHOLD_TOKENS),
   ]);
 
-  const host = (await headers()).get("host") ?? "localhost:3000";
-  const protocol = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
-  const endpoint = `${protocol}://${host}`;
-
   return (
     <DashboardShell fullWidth>
       <OverviewContent
-        apiKey={apiKey.key}
-        endpoint={endpoint}
         summary={summary}
         daily={daily}
         modelUsage={modelUsage}

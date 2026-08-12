@@ -51,8 +51,9 @@ one-time setup screen (not a login) to pick where events are stored:
   URL, service role key, and project ID (run `prisma/postbase/schema.sql`
   in your Postbase SQL editor first).
 
-Once configured, the dashboard shows your API key immediately. Paste it
-into the SDK:
+Once configured, go to **API Keys** and click **New key** — the full
+key is shown once, right there, so you can copy it. Paste it into the
+SDK:
 
 ```ts
 import OpenAI from "openai";
