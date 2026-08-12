@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { chartColorAt } from "@/lib/utils/chart-colors";
 import { SegmentedBar } from "@/components/dashboard/segmented-bar";
+import { buildDemoDimensionData } from "@/lib/utils/demo-data";
 import type { DimensionTrend, UsageDimension } from "@/lib/store/types";
 import type { ExploreTopN } from "@/components/dashboard/explore-controls";
 
@@ -18,30 +19,41 @@ function formatCost(value: number): string {
   return `$${value.toFixed(value < 1 ? 4 : 2)}`;
 }
 
-export function ExploreContent({ dimension, topN }: { dimension: UsageDimension; topN: ExploreTopN }) {
-  const [trends, setTrends] = useState<DimensionTrend[]>([]);
+export function ExploreContent({
+  dimension,
+  topN,
+  demoMode,
+}: {
+  dimension: UsageDimension;
+  topN: ExploreTopN;
+  demoMode: boolean;
+}) {
+  const [liveTrends, setLiveTrends] = useState<DimensionTrend[]>([]);
   const [loadedDimension, setLoadedDimension] = useState<UsageDimension | null>(null);
-  const loading = loadedDimension !== dimension;
+  const loading = !demoMode && loadedDimension !== dimension;
 
   // Effect body performs no synchronous setState — it kicks off an async
   // fetch whose state updates all happen after an await, matching the
   // react-hooks/set-state-in-effect requirement (see overview-content.tsx).
   useEffect(() => {
-    if (loadedDimension === dimension) return;
+    if (demoMode || loadedDimension === dimension) return;
 
     let cancelled = false;
     (async () => {
       const response = await fetch(`/api/usage-by-dimension?dimension=${dimension}&days=${DEFAULT_DAYS}`);
       const body = await response.json();
       if (cancelled) return;
-      setTrends(body.trends ?? []);
+      setLiveTrends(body.trends ?? []);
       setLoadedDimension(dimension);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [dimension, loadedDimension]);
+  }, [dimension, loadedDimension, demoMode]);
+
+  const demoTrends = useMemo(() => buildDemoDimensionData(dimension, DEFAULT_DAYS).trends, [dimension]);
+  const trends = demoMode ? demoTrends : liveTrends;
 
   const ranked = [...trends].sort((a, b) => b.cost - a.cost).slice(0, topN);
   const totalCost = ranked.reduce((sum, row) => sum + row.cost, 0);

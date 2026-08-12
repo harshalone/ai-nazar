@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { DimensionStackedChart } from "@/components/dashboard/dimension-stacked-chart";
 import { TrendingList } from "@/components/dashboard/trending-list";
+import { buildDemoDimensionData } from "@/lib/utils/demo-data";
 import type { DimensionDailyPoint, DimensionTrend, UsageDimension } from "@/lib/store/types";
 
 interface DimensionData {
@@ -17,31 +18,44 @@ const SECTIONS: { dimension: UsageDimension; title: string }[] = [
   { dimension: "apiKey", title: "API Keys" },
 ];
 
-function DimensionSection({ dimension, title, days }: { dimension: UsageDimension; title: string; days: number }) {
-  const [data, setData] = useState<DimensionData | null>(null);
+function DimensionSection({
+  dimension,
+  title,
+  days,
+  demoMode,
+}: {
+  dimension: UsageDimension;
+  title: string;
+  days: number;
+  demoMode: boolean;
+}) {
+  const [liveData, setLiveData] = useState<DimensionData | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const key = `${dimension}:${days}`;
-  const loading = loadedKey !== key;
+  const loading = !demoMode && loadedKey !== key;
 
   // Effect body performs no synchronous setState — it kicks off an async
   // fetch whose state updates all happen after an await, matching the
   // react-hooks/set-state-in-effect requirement (see overview-content.tsx).
   useEffect(() => {
-    if (loadedKey === key) return;
+    if (demoMode || loadedKey === key) return;
 
     let cancelled = false;
     (async () => {
       const response = await fetch(`/api/usage-by-dimension?dimension=${dimension}&days=${days}`);
       const body = await response.json();
       if (cancelled) return;
-      setData(body);
+      setLiveData(body);
       setLoadedKey(key);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [dimension, days, key, loadedKey]);
+  }, [dimension, days, key, loadedKey, demoMode]);
+
+  const demoData = useMemo(() => buildDemoDimensionData(dimension, days), [dimension, days]);
+  const data = demoMode ? demoData : liveData;
 
   return (
     <div>
@@ -82,11 +96,17 @@ function DimensionSection({ dimension, title, days }: { dimension: UsageDimensio
   );
 }
 
-export function TrendsContent({ days }: { days: number }) {
+export function TrendsContent({ days, demoMode }: { days: number; demoMode: boolean }) {
   return (
     <div className="space-y-8">
       {SECTIONS.map((section) => (
-        <DimensionSection key={section.dimension} dimension={section.dimension} title={section.title} days={days} />
+        <DimensionSection
+          key={section.dimension}
+          dimension={section.dimension}
+          title={section.title}
+          days={days}
+          demoMode={demoMode}
+        />
       ))}
     </div>
   );

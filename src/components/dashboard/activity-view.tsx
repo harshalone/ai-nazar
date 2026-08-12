@@ -32,38 +32,47 @@ export function ActivityView({
   problems: LargePromptProblem[];
 }) {
   const [active, setActive] = useState<ActivityTab>("overview");
-
-  const [overviewDays, setOverviewDays] = useState(OVERVIEW_DEFAULT_DAYS);
   const [demoMode, setDemoMode] = useState(false);
 
+  const [overviewDays, setOverviewDays] = useState(OVERVIEW_DEFAULT_DAYS);
   const [trendsDays, setTrendsDays] = useState(TRENDS_DEFAULT_DAYS);
 
   const [exploreDimension, setExploreDimension] = useState<UsageDimension>("model");
   const [exploreTopN, setExploreTopN] = useState<ExploreTopN>(EXPLORE_TOP_N_OPTIONS[1]);
 
+  const demoToggle = (
+    <Button
+      variant={demoMode ? "primary" : "secondary"}
+      size="md"
+      onClick={() => setDemoMode((v) => !v)}
+      className="shrink-0"
+    >
+      <Sparkles className="h-4 w-4" />
+      {demoMode ? "Viewing demo data" : "Demo data"}
+    </Button>
+  );
+
   const controls =
     active === "overview" ? (
       <>
         <DateRangePicker days={overviewDays} onChange={setOverviewDays} />
-        <Button
-          variant={demoMode ? "primary" : "secondary"}
-          size="md"
-          onClick={() => setDemoMode((v) => !v)}
-          className="shrink-0"
-        >
-          <Sparkles className="h-4 w-4" />
-          {demoMode ? "Viewing demo data" : "Demo data"}
-        </Button>
+        {demoToggle}
       </>
     ) : active === "trends" ? (
-      <DateRangePicker days={trendsDays} onChange={setTrendsDays} />
+      <>
+        <DateRangePicker days={trendsDays} onChange={setTrendsDays} />
+        {demoToggle}
+      </>
     ) : (
-      <ExploreControls
-        dimension={exploreDimension}
-        onDimensionChange={setExploreDimension}
-        topN={exploreTopN}
-        onTopNChange={setExploreTopN}
-      />
+      <>
+        <ExploreControls
+          dimension={exploreDimension}
+          onDimensionChange={setExploreDimension}
+          topN={exploreTopN}
+          onTopNChange={setExploreTopN}
+        />
+        {demoToggle}
+      </>
     );
 
   return (
@@ -81,8 +90,8 @@ export function ActivityView({
           problems={problems}
         />
       }
-      trends={<TrendsContent days={trendsDays} />}
-      explore={<ExploreContent dimension={exploreDimension} topN={exploreTopN} />}
+      trends={<TrendsContent days={trendsDays} demoMode={demoMode} />}
+      explore={<ExploreContent dimension={exploreDimension} topN={exploreTopN} demoMode={demoMode} />}
     />
   );
 }

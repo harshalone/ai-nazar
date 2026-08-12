@@ -133,6 +133,35 @@ export interface DimensionTrend {
   sparkline: number[];
 }
 
+/** One ranked row in the Overview tab's "Top API Keys" / "Top Apps" lists. */
+export interface OverviewRankedStat {
+  key: string;
+  label: string;
+  totalTokens: number;
+}
+
+/** One day's spend split by whether it was billed via a user's own provider key (BYOK) or through AI Nazar. Demo-only — not tracked live yet. */
+export interface UsageTypePoint {
+  day: string;
+  byok: number;
+  openRouterSpend: number;
+}
+
+/** One day's token volume split by kind. Demo-only — reasoning tokens aren't tracked live yet. */
+export interface TokenBreakdownPoint {
+  day: string;
+  reasoning: number;
+  completion: number;
+  prompt: number;
+}
+
+/** One day's prompt tokens split by cache hit/miss. Demo-only — prompt caching isn't tracked live yet. */
+export interface PromptCachingPoint {
+  day: string;
+  cached: number;
+  uncached: number;
+}
+
 export interface EventsStore {
   /** Human-readable identifier for the active adapter, e.g. "sqlite". */
   readonly kind: "sqlite" | "postgres" | "postbase";

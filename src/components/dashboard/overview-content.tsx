@@ -2,7 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Activity, DollarSign, TrendingDown } from "lucide-react";
-import type { DailyUsagePoint, LargePromptProblem, ModelUsageStat, UsageSummary } from "@/lib/store/types";
+import type {
+  DailyUsagePoint,
+  LargePromptProblem,
+  ModelUsageStat,
+  OverviewRankedStat,
+  PromptCachingPoint,
+  TokenBreakdownPoint,
+  UsageSummary,
+  UsageTypePoint,
+} from "@/lib/store/types";
 import { buildDemoData } from "@/lib/utils/demo-data";
 import { UsageChart } from "@/components/dashboard/usage-chart";
 import { AreaChart } from "@/components/dashboard/area-chart";
@@ -10,6 +19,8 @@ import { DonutChart } from "@/components/dashboard/donut-chart";
 import { HorizontalBarChart } from "@/components/dashboard/horizontal-bar-chart";
 import { StackedBarChart } from "@/components/dashboard/stacked-bar-chart";
 import { RadialGauge } from "@/components/dashboard/radial-gauge";
+import { RankedTokenList } from "@/components/dashboard/ranked-token-list";
+import { MultiStackedBarChart } from "@/components/dashboard/multi-stacked-bar-chart";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card } from "@/components/ui/card";
 
@@ -19,6 +30,11 @@ interface OverviewData {
   modelUsage: ModelUsageStat[];
   problems: LargePromptProblem[];
 }
+
+const EMPTY_RANKED: OverviewRankedStat[] = [];
+const EMPTY_USAGE_TYPE: UsageTypePoint[] = [];
+const EMPTY_TOKEN_BREAKDOWN: TokenBreakdownPoint[] = [];
+const EMPTY_PROMPT_CACHING: PromptCachingPoint[] = [];
 
 export function OverviewContent({
   days,
@@ -66,6 +82,15 @@ export function OverviewContent({
   const activeModelUsage = demoMode ? demoData.modelUsage : liveData.modelUsage;
   const activeProblems = demoMode ? demoData.problems : liveData.problems;
 
+  // Apps, BYOK spend, reasoning tokens, and prompt caching aren't tracked
+  // live yet — these only populate in demo mode and show an empty state
+  // otherwise, rather than fabricating zeros for real accounts.
+  const topApiKeys = demoMode ? demoData.topApiKeys : EMPTY_RANKED;
+  const topApps = demoMode ? demoData.topApps : EMPTY_RANKED;
+  const usageType = demoMode ? demoData.usageType : EMPTY_USAGE_TYPE;
+  const tokenBreakdown = demoMode ? demoData.tokenBreakdown : EMPTY_TOKEN_BREAKDOWN;
+  const promptCaching = demoMode ? demoData.promptCaching : EMPTY_PROMPT_CACHING;
+
   const potentialSavings = activeProblems.reduce(
     (sum, p) => sum + p.estimatedMonthlySavings,
     0,
@@ -93,6 +118,19 @@ export function OverviewContent({
 
   const spendSparkline = activeDaily.map((d) => d.cost);
   const requestsSparkline = activeDaily.map((d) => d.requests);
+
+  const usageTypeTrend = usageType.map((d) => ({ label: d.day, value: d.byok + d.openRouterSpend }));
+  const tokenBreakdownTrend = tokenBreakdown.map((d) => ({
+    label: d.day,
+    reasoning: d.reasoning,
+    completion: d.completion,
+    prompt: d.prompt,
+  }));
+  const promptCachingTrend = promptCaching.map((d) => ({
+    label: d.day,
+    cached: d.cached,
+    uncached: d.uncached,
+  }));
 
   return (
     <div className="space-y-6">
@@ -197,6 +235,72 @@ export function OverviewContent({
             <HorizontalBarChart
               data={byErrorRate.map((m) => ({ label: m.model, value: m.errorRate * 100 }))}
               valueFormatter={(v) => `${v.toFixed(1)}%`}
+            />
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-6">
+          <h2 className="text-sm font-semibold text-foreground">Top API Keys</h2>
+          <div className="mt-4">
+            <RankedTokenList items={topApiKeys} emptyLabel="Turn on Demo data to preview, or start sending events." />
+          </div>
+        </Card>
+        <Card className="p-6">
+          <h2 className="text-sm font-semibold text-foreground">Top Apps</h2>
+          <div className="mt-4">
+            <RankedTokenList items={topApps} emptyLabel="App attribution isn't tracked yet — turn on Demo data to preview." />
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-6">
+          <h2 className="text-sm font-semibold text-foreground">Usage type</h2>
+          <div className="mt-4">
+            <AreaChart data={usageTypeTrend} valueFormatter={(v) => `$${v.toFixed(3)}`} compact color="var(--color-chart-4)" />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-foreground-muted">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: "var(--color-chart-4)" }} />
+              BYOK
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: "var(--color-chart-4)" }} />
+              OpenRouter Spend
+            </span>
+          </div>
+        </Card>
+        <Card className="p-6">
+          <h2 className="text-sm font-semibold text-foreground">Token breakdown</h2>
+          <div className="mt-4">
+            <MultiStackedBarChart
+              data={tokenBreakdownTrend}
+              series={[
+                { key: "reasoning", label: "Reasoning", color: "var(--color-danger)" },
+                { key: "completion", label: "Completion", color: "var(--color-chart-4)" },
+                { key: "prompt", label: "Prompt", color: "var(--color-brand)" },
+              ]}
+              valueFormatter={(v: number) => v.toLocaleString()}
+              compact
+            />
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4">
+        <Card className="p-6">
+          <h2 className="text-sm font-semibold text-foreground">Prompt token caching</h2>
+          <div className="mt-4">
+            <MultiStackedBarChart
+              data={promptCachingTrend}
+              series={[
+                { key: "uncached", label: "Uncached", color: "var(--color-foreground-subtle)" },
+                { key: "cached", label: "Cached", color: "var(--color-warning)" },
+              ]}
+              valueFormatter={(v: number) => v.toLocaleString()}
+              compact
             />
           </div>
         </Card>
